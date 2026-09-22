@@ -1,0 +1,150 @@
+/* ---------------------------------------------------------------------------
+ * Rail inspection console palette.
+ *
+ * Dark-first HMI language: graphite ground, hairline separators, flat fills.
+ * Chromatic colour is reserved for meaning only — status and data series — so
+ * the neutral UI never competes with a live reading for attention.
+ * ------------------------------------------------------------------------ */
+
+:root {
+  --radius: 0.375rem;
+
+  /* light: paper-grey instrument panel */
+  --background: oklch(0.975 0.004 95);
+  --foreground: oklch(0.24 0.012 90);
+  --card: oklch(0.998 0 0);
+  --card-foreground: oklch(0.24 0.012 90);
+  --popover: oklch(0.998 0 0);
+  --popover-foreground: oklch(0.24 0.012 90);
+  --primary: oklch(0.32 0.014 90);
+  --primary-foreground: oklch(0.975 0.004 95);
+  --secondary: oklch(0.945 0.006 92);
+  --secondary-foreground: oklch(0.32 0.014 90);
+  --muted: oklch(0.945 0.006 92);
+  --muted-foreground: oklch(0.53 0.016 90);
+  --accent: oklch(0.93 0.02 88);
+  --accent-foreground: oklch(0.3 0.02 80);
+  --destructive: oklch(0.55 0.2 22);
+
+  --border: oklch(0.24 0.012 90 / 12%);
+  --input: oklch(0.24 0.012 90 / 18%);
+  --ring: oklch(0.62 0.15 74);
+
+  /* signal / status semantics — shared across both themes */
+  --signal-nominal: oklch(0.6 0.12 155);
+  --signal-caution: oklch(0.72 0.15 78);
+  --signal-alarm: oklch(0.58 0.21 22);
+  --signal-idle: oklch(0.62 0.01 90);
+
+  /* measurement series: height, pull-out, gauge, extra */
+  --chart-1: oklch(0.66 0.15 74);
+  --chart-2: oklch(0.62 0.11 176);
+  --chart-3: oklch(0.58 0.14 316);
+  --chart-4: oklch(0.6 0.18 27);
+  --chart-5: oklch(0.66 0.13 145);
+
+  --sidebar: oklch(0.96 0.005 93);
+  --sidebar-foreground: oklch(0.24 0.012 90);
+  --sidebar-primary: oklch(0.32 0.014 90);
+  --sidebar-primary-foreground: oklch(0.975 0.004 95);
+  --sidebar-accent: oklch(0.93 0.02 88);
+  --sidebar-accent-foreground: oklch(0.3 0.02 80);
+  --sidebar-border: oklch(0.24 0.012 90 / 12%);
+  --sidebar-ring: oklch(0.62 0.15 74);
+}
+
+.dark {
+  /* dark: near-graphite ground, deliberately low-chroma so it reads as
+     instrument housing rather than a coloured backdrop */
+  --background: oklch(0.17 0.007 95);
+  --foreground: oklch(0.93 0.006 92);
+  --card: oklch(0.205 0.008 95);
+  --card-foreground: oklch(0.93 0.006 92);
+  --popover: oklch(0.22 0.009 95);
+  --popover-foreground: oklch(0.93 0.006 92);
+  --primary: oklch(0.9 0.008 92);
+  --primary-foreground: oklch(0.22 0.01 95);
+  --secondary: oklch(0.26 0.009 95);
+  --secondary-foreground: oklch(0.9 0.008 92);
+  --muted: oklch(0.26 0.009 95);
+  --muted-foreground: oklch(0.67 0.014 92);
+  --accent: oklch(0.29 0.012 92);
+  --accent-foreground: oklch(0.93 0.006 92);
+  --destructive: oklch(0.66 0.19 22);
+
+  --border: oklch(0.93 0.006 92 / 11%);
+  --input: oklch(0.93 0.006 92 / 16%);
+  --ring: oklch(0.74 0.14 74);
+
+  --signal-nominal: oklch(0.72 0.13 155);
+  --signal-caution: oklch(0.8 0.14 78);
+  --signal-alarm: oklch(0.67 0.19 22);
+  --signal-idle: oklch(0.55 0.01 92);
+
+  --chart-1: oklch(0.78 0.14 76);
+  --chart-2: oklch(0.74 0.11 178);
+  --chart-3: oklch(0.72 0.12 318);
+  --chart-4: oklch(0.71 0.16 28);
+  --chart-5: oklch(0.78 0.12 146);
+
+  --sidebar: oklch(0.145 0.007 95);
+  --sidebar-foreground: oklch(0.9 0.006 92);
+  --sidebar-primary: oklch(0.78 0.14 76);
+  --sidebar-primary-foreground: oklch(0.19 0.01 95);
+  --sidebar-accent: oklch(0.25 0.01 95);
+  --sidebar-accent-foreground: oklch(0.93 0.006 92);
+  --sidebar-border: oklch(0.93 0.006 92 / 9%);
+  --sidebar-ring: oklch(0.74 0.14 74);
+}
+
+@theme inline {
+  --font-sans: 'Inter', 'Noto Sans SC', 'Microsoft YaHei', ui-sans-serif,
+    system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Consolas,
+    'Noto Sans SC', monospace;
+  --font-inter: 'Inter', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  --font-system: ui-sans-serif, system-ui, 'Noto Sans SC', 'Microsoft YaHei',
+    sans-serif;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-signal-nominal: var(--signal-nominal);
+  --color-signal-caution: var(--signal-caution);
+  --color-signal-alarm: var(--signal-alarm);
+  --color-signal-idle: var(--signal-idle);
+}

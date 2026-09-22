@@ -1,0 +1,186 @@
+# =============================================================================
+# RIC line parser definition  (THE configurable parser — nothing in the code
+# hard-codes field names, positions or the batch terminator)
+# =============================================================================
+#
+# Device: DHJ-9 接触网激光检测仪, attached through a
+# Silicon Labs CP210x USB-to-UART bridge (usually COM7 on this PC, never
+# hard-coded — see SerialService.enumerate_ports).
+#
+# The DHJ-9 is NOT a continuous live source. The operator presses 导出记录 on the
+# instrument, it then dumps one batch of stored records and finishes with `OVER`.
+#
+# Instrument header (11 names) vs. an actual record (12 fields):
+#
+#   记录类型,测量方向,记录号,线号,工区,杆号,测量位置,时间,高度,拉出,轨距
+#   0,0,0,0,0,1,1,260922-091952,2121.5,582.2,1434.6,-9.8
+#   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ^^^^^^^^^^^^^^^^^^^^^^^
+#   positions 0-10: confirmed by the header   position 11: meaning UNKNOWN
+#
+# The header names 11 columns but every record carries 12 fields. Position 11 has
+# no counterpart in the header, so it keeps the neutral name `metric_extra_1`.
+# Do NOT rename it to 水平 / 超高 / 倾角 / 轨距变化率 or anything else: it is
+# unknown, and a plausible-sounding wrong name is worse than an honest placeholder.
+#
+# SSCOM screenshots show `[16:41:05.296]收←◆` prefixes. That is SSCOM's own
+# display decoration, NOT part of the DHJ-9 protocol — the parser never expects
+# or strips it (we read the port directly with pyserial).
+# =============================================================================
+
+line:
+  # Comma separated ASCII, exactly 12 fields per data line.
+  delimiter: ","
+  field_count: 12
+  # strict: false  -> a line whose field count is wrong is stored verbatim in
+  #                   `raw_lines` with kind='invalid' + parse_error and the
+  #                   service keeps running (this is what we want in the field).
+  # strict: true   -> the same lines are still recorded, additionally a
+  #                   LineSchemaError is raised inside the parser so a caller
+  #                   that wants to fail loudly can do so. Never drops rows.
+  strict: false
+  # Line encoding on the wire. Values that are not valid ASCII are decoded with
+  # errors="replace" so a garbage line can still be archived verbatim.
+  encoding: "ascii"
+  # Blank / whitespace-only physical lines: keep them in `raw_lines`
+  # (kind='invalid', parse_error='blank line') so the debugging archive is
+  # complete. Set false to archive nothing for blank lines.
+  record_blank_lines: true
+  # Characters stripped from both ends before classification.
+  strip_chars: "\r\n\t "
+
+# -----------------------------------------------------------------------------
+# Instrument header line. When the DHJ-9 (or a replay tool) prefixes a batch with
+# the Chinese column names, the parser recognises it as `header` instead of
+# reporting 11 broken fields: a header starts the batch and is archived as a
+# protocol line, exactly like the terminator.
+# -----------------------------------------------------------------------------
+header:
+  enabled: true
+  # Compared as an exact, comma-separated, case-sensitive set of trimmed names.
+  names:
+    - "记录类型"
+    - "测量方向"
+    - "记录号"
+    - "线号"
+    - "工区"
+    - "杆号"
+    - "测量位置"
+    - "时间"
+    - "高度"
+    - "拉出"
+    - "轨距"
+
+# -----------------------------------------------------------------------------
+# End-of-batch control token. A control line is never parsed as data and is
+# never inserted into `measurements`, but it does land in `raw_lines`
+# (kind='control') and triggers a single-transaction flush of the batch.
+# -----------------------------------------------------------------------------
+end_of_batch:
+  token: "OVER"
+  # contains -> any line that contains the token (case-insensitively) is the
+  #            batch terminator, e.g. "OVER", "OVER\r", "1,2,OVER".
+  # exact    -> only a line equal to the token after stripping counts.
+  match: "contains"
+
+# -----------------------------------------------------------------------------
+# Timestamp handling (position 7).
+# `%y` is interpreted by Python's strptime: 69-99 -> 196x-199x, 00-68 -> 200x.
+# `260922-091952` therefore means 2026-09-22 09:19:52 (device local time; the
+# stream carries no timezone, so `ts` is stored naive ISO-8601, no offset).
+# The raw string is ALWAYS kept in `ts_raw` as well.
+# Defensive rule: if strptime fails, `ts_raw` keeps the raw text and `ts`
+# becomes NULL. The row is ALWAYS still persisted.
+# -----------------------------------------------------------------------------
+timestamp:
+  index: 7
+  # Name used when the timestamp is echoed through /api/parser/fields.
+  name: "timestamp"
+  format: "%y%m%d-%H%M%S"
+  # The timestamp field is excluded from the `fields` JSON object because it has
+  # dedicated columns (ts_raw / ts).
+  include_in_fields: false
+
+# -----------------------------------------------------------------------------
+# Field definitions, keyed by position index. `type` is one of:
+#   string    -> kept verbatim (trimmed), no interpretation at all
+#   float     -> decimal number; a coercion failure is recorded, never guessed at
+#   int       -> strict integer
+#   number    -> alias of float that additionally normalises 1435.0 -> 1435
+#   timestamp -> handled by the `timestamp:` block above
+# Names 0-10 come from the instrument header and are confirmed. `unit` stays
+# null everywhere: the header gives names, not units, and inventing "mm" would
+# be a guess dressed up as fact.
+# -----------------------------------------------------------------------------
+fields:
+  - index: 0
+    name: "record_type"      # 记录类型
+    type: "int"
+    unit: null
+    confirmed: true
+    note: "记录类型. Name confirmed from the instrument header. Unit/enumeration not documented."
+  - index: 1
+    name: "measure_direction" # 测量方向
+    type: "int"
+    unit: null
+    confirmed: true
+    note: "测量方向. Name confirmed from the instrument header. Value encoding not documented."
+  - index: 2
+    name: "record_no"        # 记录号
+    type: "int"
+    unit: null
+    confirmed: true
+    note: "记录号. Name confirmed from the instrument header."
+  - index: 3
+    name: "line_no"          # 线号
+    type: "int"
+    unit: null
+    confirmed: true
+    note: "线号. Name confirmed from the instrument header."
+  - index: 4
+    name: "work_area"        # 工区
+    type: "int"
+    unit: null
+    confirmed: true
+    note: "工区. Name confirmed from the instrument header."
+  - index: 5
+    name: "pole_no"          # 杆号
+    type: "int"
+    unit: null
+    confirmed: true
+    note: "杆号. Name confirmed from the instrument header."
+  - index: 6
+    name: "measure_position" # 测量位置
+    type: "int"
+    unit: null
+    confirmed: true
+    note: "测量位置. Name confirmed from the instrument header."
+  - index: 7
+    name: "timestamp"        # 时间
+    type: "timestamp"
+    unit: null
+    confirmed: true
+    note: "时间, yyMMdd-HHmmss. Stored as ts_raw + normalised ts (NULL when unparseable)."
+  - index: 8
+    name: "height"           # 高度
+    type: "float"
+    unit: null
+    confirmed: true
+    note: "高度. Name confirmed from the instrument header; unit not stated by the instrument."
+  - index: 9
+    name: "pull_out"         # 拉出
+    type: "float"
+    unit: null
+    confirmed: true
+    note: "拉出. Name confirmed from the instrument header; unit not stated by the instrument."
+  - index: 10
+    name: "gauge"            # 轨距
+    type: "float"
+    unit: null
+    confirmed: true
+    note: "轨距. Name confirmed from the instrument header; unit not stated by the instrument."
+  - index: 11
+    name: "metric_extra_1"   # Deliberately NON-SEMANTIC placeholder name.
+    type: "float"
+    unit: null
+    confirmed: false
+    note: "UNKNOWN: the header lists 11 columns but every record carries 12, so this trailing column has no confirmed name. Keep 'metric_extra_1' — do NOT guess 水平/超高/倾角/轨距变化量."

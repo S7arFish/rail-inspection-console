@@ -1,0 +1,13 @@
+# Rail Inspection Console - backend dependencies (pinned, no extras).
+# Only these four top-level requirements are allowed; everything else is a
+# transitive dependency resolved by pip.
+#
+# Web framework / ASGI server
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+
+# Windows serial port access (COM7 / CP210x USB-UART) + port enumeration
+pyserial==3.5
+
+# config/parser.yaml loading
+PyYAML==6.0.3
