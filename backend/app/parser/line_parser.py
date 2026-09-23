@@ -479,11 +479,15 @@ class LineParser:
         return [self.parse(line) for line in lines]
 
     def decode(self, data: bytes) -> str:
-        """Decode wire bytes without ever raising on garbage."""
-        try:
-            return data.decode(self.config.encoding)
-        except (LookupError, UnicodeDecodeError):
-            return data.decode("ascii", errors="replace")
+        """Decode wire bytes without ever raising on garbage.
+
+        The strategy itself lives in :mod:`app.text_decoder` so encoding is
+        decided in exactly one place; this wrapper only feeds it the configured
+        preference and hands back the text.
+        """
+        from ..text_decoder import decode_serial_line  # noqa: PLC0415 - avoids a cycle
+
+        return decode_serial_line(data, preferred=self.config.encoding).text
 
     # ----------------------------------------------------------------- private
     def _is_header(self, text: str) -> bool:

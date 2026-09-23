@@ -163,7 +163,7 @@ export function Settings() {
                       {/* full text, never sliced: the dropdown grows to fit it,
                           only the closed trigger clips it with an ellipsis */}
                       <span className='text-muted-foreground'>
-                        {p.preferred ? '· 推荐 ' : ''}
+                        {p.suggested ? '· 推荐 ' : ''}
                         {p.description ?? ''}
                       </span>
                     </SelectItem>

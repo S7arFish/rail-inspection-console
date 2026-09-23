@@ -109,11 +109,21 @@ class DisconnectResponse(BaseModel):
 
 
 class PortInfo(BaseModel):
+    """Platform-neutral port descriptor.
+
+    `device` is ``COM7`` on Windows and ``/dev/ttyUSB0`` on Linux; nothing here
+    assumes either naming scheme.
+    """
+
     device: str
     name: str
     description: str | None = None
     hwid: str | None = None
-    preferred: bool = False
+    manufacturer: str | None = None
+    vid: int | None = None
+    pid: int | None = None
+    serial_number: str | None = None
+    suggested: bool = False
     active: bool = False
 
 

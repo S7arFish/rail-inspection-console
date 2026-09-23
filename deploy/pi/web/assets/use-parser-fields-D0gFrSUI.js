@@ -1,0 +1,1 @@
+import{c as e}from"./format-BZayc69g.js";import{n as t}from"./data-source-CABL4VFR.js";function n(){return e({queryKey:[`parser`,`fields`],queryFn:t,staleTime:3e5})}export{n as t};

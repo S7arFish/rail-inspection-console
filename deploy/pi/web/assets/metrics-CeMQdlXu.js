@@ -1,0 +1,1 @@
+var e=[{field:`height`,label:`当前高度`,tentative:!0,series:0},{field:`pull_out`,label:`当前拉出值`,tentative:!0,series:1},{field:`gauge`,label:`当前轨距`,tentative:!0,series:2},{field:`metric_extra_1`,label:`metric_extra_1`,tentative:!0,series:3}],t=[`metric_extra_1`];export{t as n,e as t};

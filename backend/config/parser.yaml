@@ -38,8 +38,11 @@ line:
   #                   LineSchemaError is raised inside the parser so a caller
   #                   that wants to fail loudly can do so. Never drops rows.
   strict: false
-  # Line encoding on the wire. Values that are not valid ASCII are decoded with
-  # errors="replace" so a garbage line can still be archived verbatim.
+  # Nominal wire encoding. Data lines and `OVER` are pure ASCII; the Chinese
+  # header line is GBK/GB18030 on the real instrument. Actual decoding is done by
+  # app/text_decoder.py, which tries ASCII -> (this) -> UTF-8 -> GB18030 and only
+  # then falls back to replacement decoding, so a bad line can never kill the
+  # reader thread.
   encoding: "ascii"
   # Blank / whitespace-only physical lines: keep them in `raw_lines`
   # (kind='invalid', parse_error='blank line') so the debugging archive is

@@ -28,6 +28,7 @@ from .db.database import DatabaseUnavailable
 from .deps import Container, build_container
 from .services.serial_service import SerialService
 from .settings import Settings, get_settings
+from .web import mount_spa
 
 LOGGER_NAME = "app"
 
@@ -128,6 +129,12 @@ def create_app(settings: Settings | None = None, *, container: Container | None 
         return JSONResponse(status_code=503, content={"detail": f"database unavailable: {exc}"})
 
     application.include_router(api_router)
+
+    # Production (Pi kiosk): FastAPI also serves the pre-built React SPA, so the
+    # browser only needs one origin. With no build present - i.e. on a dev
+    # machine where Vite serves the frontend - the root stays a JSON pointer.
+    if mount_spa(application, settings.web_dir):
+        return application
 
     @application.get("/", include_in_schema=False)
     async def index() -> dict[str, object]:
