@@ -1,0 +1,35 @@
+# Line endings are a real deployment risk here: the Pi runs the shell scripts
+# through /usr/bin/env bash, and a stray CR breaks the shebang.
+# The dev machine has core.autocrlf=true, so pin the rules explicitly.
+
+* text=auto
+
+# Linux-side scripts must always be LF, no matter who commits from Windows.
+*.sh    text eol=lf
+*.service.in      text eol=lf
+*.desktop.in      text eol=lf
+
+# Windows batch files need CRLF (cmd.exe misbehaves on LF-only files).
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Source and config: normalise, no forced eol.
+*.py    text
+*.ts    text
+*.tsx   text
+*.js    text
+*.json  text
+*.yaml  text
+*.yml   text
+*.css   text
+*.html  text
+*.md    text
+
+# Build output staged for the Pi; GitHub can fold it in diffs.
+deploy/pi/web/**  linguist-generated=true
+
+# Never touch binary assets.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

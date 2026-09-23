@@ -48,12 +48,26 @@ rail-inspection-console/
 │     ├─ types/              domain.ts（后端契约）· console.ts（后端尚未提供的形态）
 │     └─ styles/             index.css · theme.css（工业深色主题）
 ├─ data/                     SQLite 数据库目录（.db 不入库，首次启动自动建库）
+├─ deploy/
+│  ├─ pi/web/                生产前端产物（由 package-pi-web.bat 生成，入库）
+│  ├─ systemd/ric-console.service.in   systemd 单元模板
+│  └─ desktop/ric-console-kiosk.desktop.in  桌面自启动模板
 ├─ scripts/
 │  ├─ dev.bat                一键启动/安装前后端开发环境
 │  ├─ check-env.bat          新电脑环境检查（git/python/node/npm + 目录文件）
 │  ├─ test-all.bat           全项目检查（pytest + tsc + vite build）
-│  └─ inspect-db.py          只读查看批次数据（标准库，不改数据库）
-├─ docs/WINDOWS_SETUP_AND_DHJ9_TEST.md   新电脑部署与真机测试指南
+│  ├─ package-pi-web.bat     构建并暂存 Pi 生产前端
+│  ├─ inspect-db.py          只读查看批次数据（标准库，不改数据库）
+│  ├─ pi-install.sh          Raspberry Pi 一键部署（Python/venv/systemd/kiosk）
+│  ├─ pi-kiosk.sh            HDMI 本机全屏启动（等健康检查再开浏览器）
+│  ├─ pi-status.sh           只读状态板（服务/健康/DHJ-9/摄像头/Chromium）
+│  ├─ pi-start.sh / pi-stop.sh        后端服务启停（不碰 Chromium）
+│  ├─ pi-update.sh           保守更新（脏工作区拒绝、只 --ff-only、不动数据库）
+│  └─ lib/apt-classify.sh    apt 故障分类纯函数（被 pi-install.sh 引用，可单测）
+├─ docs/
+│  ├─ WINDOWS_SETUP_AND_DHJ9_TEST.md   新电脑部署与 DHJ-9 真机测试指南
+│  ├─ RASPBERRY_PI_DEPLOYMENT.md       Raspberry Pi 一体化部署（HDMI 中控）
+│  └─ VISION_AGENT_PROTOCOL.md         未来视觉链路的进程边界与事件协议
 └─ README.md
 ```
 
@@ -111,6 +125,29 @@ npm run dev
 
 **Mock 开关**：`frontend/.env` 中 `VITE_USE_MOCK`（默认 `true`）。
 设为 `false` 后所有读取走真实后端，界面不再显示“演示数据”标记。
+生产构建由 `frontend/.env.production` 强制 `VITE_USE_MOCK=false`。
+
+### 生产部署（Raspberry Pi 4 + HDMI 本机中控）
+
+Pi 上**不运行 Vite、不依赖 Node**：开发机用 `scripts\package-pi-web.bat` 构建并把
+产物提交到 `deploy/pi/web/`，Pi 上由同一个 FastAPI 进程提供 `/api`、`/ws/live`
+与 React 静态页面，开机后 Chromium 自动全屏打开 `http://127.0.0.1:8000`。
+
+```bash
+git clone <PRIVATE_REPO_URL> && cd rail-inspection-console
+sudo bash ./scripts/pi-install.sh
+sudo reboot
+```
+
+完整步骤、Python 3.11 私有环境策略、Buster 软件源失效的安全处理、
+systemd/Kiosk/摄像头预检与维护命令见
+[docs/RASPBERRY_PI_DEPLOYMENT.md](docs/RASPBERRY_PI_DEPLOYMENT.md)；
+未来 USB 摄像头 → vision agent 的进程边界与事件协议见
+[docs/VISION_AGENT_PROTOCOL.md](docs/VISION_AGENT_PROTOCOL.md)。
+
+> **安全**：生产默认 `RIC_HOST=127.0.0.1`（页面就在 Pi 自己的 HDMI 上显示）。
+> 改成 `0.0.0.0` 会把中控开放到局域网，而本服务**没有任何登录鉴权**，
+> 仅用于调试，用完请改回。
 
 ---
 

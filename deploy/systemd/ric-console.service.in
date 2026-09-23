@@ -1,0 +1,38 @@
+[Unit]
+Description=RIC Console (DHJ-9 serial capture + console web API)
+Documentation=file://@RIC_DIR@/docs/RASPBERRY_PI_DEPLOYMENT.md
+After=network.target
+# No network requirement: the console is shown on this machine's own HDMI
+# output, and the DHJ-9 only speaks when the operator presses 导出记录.
+
+[Service]
+# Exactly one process. SerialService owns the COM/serial port and the SQLite
+# writer, so running multiple uvicorn workers would fight over the port.
+Type=simple
+User=@RIC_USER@
+WorkingDirectory=@RIC_DIR@/backend
+
+# Defaults first, then the operator-editable file so it can override them.
+# The defaults are what keep `--host`/`--port` valid even if the env file is
+# missing, empty or unreadable: systemd has no ${VAR:-default} syntax on Buster
+# (systemd 240), so the fallback has to be a real Environment= line.
+Environment=RIC_HOST=127.0.0.1
+Environment=RIC_PORT=8000
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/etc/ric-console/ric-console.env
+
+# No shell is involved: systemd expands ${VAR} itself in ExecStart arguments.
+# --app-dir is stated even though WorkingDirectory already points at backend/,
+# so `app.main` keeps importing if someone edits WorkingDirectory later.
+ExecStart=@RIC_PYTHON@ -m uvicorn app.main:app --app-dir @RIC_DIR@/backend --host ${RIC_HOST} --port ${RIC_PORT}
+
+Restart=on-failure
+RestartSec=3
+# Give the reader thread time to flush an in-flight batch and close the
+# session as interrupted instead of losing it.
+TimeoutStopSec=20
+NoNewPrivileges=true
+UMask=0022
+
+[Install]
+WantedBy=multi-user.target

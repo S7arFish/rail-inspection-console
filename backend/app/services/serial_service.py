@@ -47,6 +47,7 @@ from ..parser.line_parser import (
     ParsedLine,
 )
 from ..settings import Settings, get_settings
+from ..text_decoder import decode_serial_line
 from .realtime import (
     EV_MEASUREMENT,
     EV_PARSE_ERROR,
@@ -89,8 +90,15 @@ LINK_UP_STATES = (
     SerialState.BATCH_COMPLETE,
 )
 
-# ports we would pick first (CP210x / Silicon Labs USB-UART bridge)
-PREFERRED_PORT_MARKERS = ("cp210x", "silicon labs")
+# Text markers used when the OS does not report USB VID/PID. "cp210" covers
+# CP2101/CP2102/CP2104/CP2109 and the "CP210x" family string Windows shows.
+PREFERRED_PORT_MARKERS = ("cp210", "silicon labs")
+
+# The DHJ-9's bridge is a CP2102, which enumerates as Silicon Labs' default
+# VID/PID. Matching on hardware IDs is what makes Linux /dev/ttyUSB* detection
+# reliable without depending on the description text.
+DHJ9_USB_VID = 0x10C4
+DHJ9_USB_PID = 0xEA60
 
 
 def _connect_failure_message(port: str, exc: BaseException) -> str:
@@ -145,7 +153,13 @@ class LinkConfig:
     flow_control: str = "none"
 
     def serial_kwargs(self) -> dict[str, Any]:
-        """Translate ``flow_control`` into pyserial keyword arguments."""
+        """Translate ``flow_control`` into pyserial keyword arguments.
+
+        Every flow-control line is stated explicitly rather than left to
+        pyserial's defaults, because the DHJ-9 cable is 115200 8N1 with no
+        handshake on either side and a stray RTS/CTS on a Linux ``cp210x``
+        port silently stalls the read.
+        """
         mode = (self.flow_control or "none").strip().lower()
         kwargs: dict[str, Any] = {
             "port": self.port,
@@ -153,6 +167,9 @@ class LinkConfig:
             "bytesize": self.data_bits,
             "parity": self.parity,
             "stopbits": self.stop_bits,
+            "rtscts": False,
+            "xonxoff": False,
+            "dsrdtr": False,
         }
         if mode in ("hardware", "rtscts", "rts_cts"):
             kwargs["rtscts"] = True
@@ -167,11 +184,21 @@ class LinkConfig:
 
 @dataclass(frozen=True)
 class PortInfo:
+    """One enumerated serial port.
+
+    Deliberately platform-neutral: `device` is ``COM7`` on Windows and
+    ``/dev/ttyUSB0`` on Linux, and nothing here assumes a naming scheme.
+    """
+
     device: str
     name: str
     description: str
     hwid: str
-    preferred: bool
+    suggested: bool
+    manufacturer: str = ""
+    vid: int | None = None
+    pid: int | None = None
+    serial_number: str = ""
     active: bool = False
 
     def to_dict(self) -> dict[str, Any]:
@@ -209,9 +236,29 @@ class DisconnectResult:
         return asdict(self)
 
 
-def _is_preferred(description: str, hwid: str) -> bool:
-    haystack = f"{description} {hwid}".lower()
+def _is_preferred(*, vid: int | None, pid: int | None, texts: Iterable[str]) -> bool:
+    """True for the DHJ-9's CP2102 bridge.
+
+    VID/PID is the strong signal; the text markers are the fallback for
+    platforms or drivers that do not report USB IDs (and they also keep the
+    existing Windows behaviour working).
+    """
+    if vid is not None and pid is not None and int(vid) == DHJ9_USB_VID and int(pid) == DHJ9_USB_PID:
+        return True
+    haystack = " ".join(t for t in texts if t).lower()
     return any(marker in haystack for marker in PREFERRED_PORT_MARKERS)
+
+
+def _usb_int(value: Any) -> int | None:
+    """pyserial reports vid/pid as ints, but some backends give hex strings."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    try:
+        return int(str(value), 16) if isinstance(value, str) else None
+    except ValueError:
+        return None
 
 
 def _default_serial_factory(**kwargs: Any) -> Any:
@@ -266,6 +313,8 @@ class SerialService:
         self._batch_count = 0
         # data rows of the batch currently being received (reset at OVER)
         self._batch_received = 0
+        # codec that actually worked on the last non-ASCII line, for one-shot logging
+        self._detected_encoding: str | None = None
 
         self._pending_measurements: list[ParsedLine] = []
         self._pending_raw_lines: list[dict[str, Any]] = []
@@ -291,7 +340,11 @@ class SerialService:
 
     # -------------------------------------------------------------- ports
     def enumerate_ports(self) -> PortsView:
-        """List COM ports with CP210x / Silicon Labs candidates sorted first.
+        """List serial ports with the DHJ-9's CP2102 bridge sorted first.
+
+        Works the same on Windows (``COM7``) and Linux (``/dev/ttyUSB0``): both
+        come from ``serial.tools.list_ports.comports()``, and the DHJ-9 is
+        recognised by USB VID/PID with a text-marker fallback.
 
         Returns ``([], None, error)`` instead of raising when the platform gives
         us nothing usable - the console must stay operable without hardware.
@@ -309,20 +362,30 @@ class SerialService:
             name = str(getattr(item, "name", "") or device)
             description = str(getattr(item, "description", "") or name)
             hwid = str(getattr(item, "hwid", "") or "")
+            manufacturer = str(getattr(item, "manufacturer", "") or "")
+            serial_number = str(getattr(item, "serial_number", "") or "")
+            vid = _usb_int(getattr(item, "vid", None))
+            pid = _usb_int(getattr(item, "pid", None))
             infos.append(
                 PortInfo(
                     device=device,
                     name=name,
                     description=description,
                     hwid=hwid,
-                    preferred=_is_preferred(description, hwid),
+                    suggested=_is_preferred(
+                        vid=vid, pid=pid, texts=(description, manufacturer, hwid, device)
+                    ),
+                    manufacturer=manufacturer,
+                    vid=vid,
+                    pid=pid,
+                    serial_number=serial_number,
                     active=bool(active_device) and device.upper() == active_device.upper(),
                 )
             )
-        # stable partition: preferred candidates first, discovery order kept inside
-        ordered = [p for p in infos if p.preferred] + [p for p in infos if not p.preferred]
+        # stable partition: suggested candidates first, discovery order kept inside
+        ordered = [p for p in infos if p.suggested] + [p for p in infos if not p.suggested]
 
-        suggested = next((p.device for p in ordered if p.preferred), None)
+        suggested = next((p.device for p in ordered if p.suggested), None)
         if suggested is None:
             # no CP210x anywhere: fall back to the active port, then to the
             # configured default, then to whatever exists. Never fails.
@@ -334,6 +397,28 @@ class SerialService:
             else:
                 suggested = ordered[0].device if ordered else None
         return PortsView(ports=tuple(ordered), suggested_port=suggested, error=None)
+
+    def _log_device_identity(self, device: str) -> None:
+        """Record which physical adapter the link landed on.
+
+        Field-diagnosis gold: it separates "wrong cable on the wrong port" from
+        "the DHJ-9 is not exporting". Purely informational, never fatal.
+        """
+        try:
+            match = next((p for p in self.enumerate_ports().ports if p.device == device), None)
+        except Exception:  # noqa: BLE001 - logging must not break a good link
+            logger.debug("device identity lookup failed", exc_info=True)
+            return
+        if match is None:
+            logger.info("serial device: device=%s (not reported by the OS port list)", device)
+            return
+        vid = f"{match.vid:04x}" if match.vid is not None else "?"
+        pid = f"{match.pid:04x}" if match.pid is not None else "?"
+        logger.info(
+            "serial device: device=%s VID=%s PID=%s manufacturer=%s serial=%s description=%s",
+            match.device, vid, pid, match.manufacturer or "?",
+            match.serial_number or "?", match.description,
+        )
 
     def active_port(self) -> str | None:
         """The port of a live link, or ``None`` when nothing is connected."""
@@ -434,6 +519,7 @@ class SerialService:
             self._batch_received = 0
             self._rx_line_count = 0
             self._parse_error_count = 0
+            self._detected_encoding = None
             self._last_line_at = None
             self._pending_measurements = []
             self._pending_raw_lines = []
@@ -442,6 +528,7 @@ class SerialService:
             self._thread = reader
         reader.start()
         logger.info("connected %s@%s, waiting for 导出记录", link.port, link.baud_rate)
+        self._log_device_identity(link.port)
         self._emit_status()
         return ConnectResult(
             ok=True, session_id=None, state=self._state.value, port=link.port,
@@ -580,13 +667,43 @@ class SerialService:
             logger.error("serial reader error: %s", error)
             self._on_reader_error(error)
 
-    def handle_raw_chunk(self, chunk: bytes | bytearray | str) -> ParsedLine | None:
-        """One wire line -> parse -> buffer/flush -> bridge event. Thread-safe."""
-        if isinstance(chunk, (bytes, bytearray)):
-            text = self.parser.decode(chunk)
+    def handle_raw_chunk(self, chunk: bytes | bytearray | memoryview | str) -> ParsedLine | None:
+        """One wire line -> decode -> parse -> buffer/flush -> bridge event.
+
+        Bytes stay bytes until :mod:`app.text_decoder` turns them into text, so
+        the GB18030 Chinese header survives intact; pyserial is never asked to
+        guess an encoding.
+        """
+        if isinstance(chunk, (bytes, bytearray, memoryview)):
+            decoded = decode_serial_line(chunk, preferred=self.parser.config.encoding)
+            self._note_encoding(decoded, chunk)
+            text = decoded.text
         else:
             text = str(chunk)
         return self.ingest_line(text)
+
+    def _note_encoding(self, decoded: Any, raw: bytes | bytearray | memoryview) -> None:
+        """Log the codec that actually worked - once per change, not per line.
+
+        ASCII is the steady state (every measurement row and ``OVER``), so it is
+        silent; the first Chinese header is the interesting event.
+        """
+        if decoded.is_ascii:
+            return
+        with self._lock:
+            previous = self._detected_encoding
+            if previous != decoded.encoding:
+                self._detected_encoding = decoded.encoding
+        if previous == decoded.encoding:
+            return
+        if decoded.had_decode_error:
+            logger.warning(
+                "serial line could not be decoded strictly; used %s with replacements (%d bytes)",
+                decoded.encoding,
+                len(bytes(raw)),
+            )
+        else:
+            logger.info("serial text encoding detected: %s", decoded.encoding)
 
     def ingest_line(self, line: str) -> ParsedLine | None:
         """Public entry point of the parse/persist path (used by the reader

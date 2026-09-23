@@ -164,7 +164,7 @@ export function createMockSampleStream() {
 
 /**
  * Enumeration is hardware-dependent, so the mock list mirrors what a real
- * CP210x-based inspection car shows on Windows — note `preferred` on the
+ * CP210x-based inspection car shows on Windows — note `suggested` on the
  * Silicon Labs port, which is what `suggested_port` picks up.
  */
 export const mockPorts: PortsResponse = {
@@ -174,14 +174,22 @@ export const mockPorts: PortsResponse = {
       name: 'COM7',
       description: 'Silicon Labs CP210x USB to UART Bridge (COM7)',
       hwid: 'USB VID:PID=10C4:EA60 SER=0001',
-      preferred: true,
+      manufacturer: 'Silicon Labs',
+      vid: 0x10c4,
+      pid: 0xea60,
+      serial_number: '0001',
+      suggested: true,
     },
     {
       device: 'COM3',
       name: 'COM3',
       description: 'Intel(R) Active Management Technology - SOL (COM3)',
       hwid: 'ACPI\\INTC0E9',
-      preferred: false,
+      manufacturer: 'Intel',
+      vid: null,
+      pid: null,
+      serial_number: null,
+      suggested: false,
     },
   ],
   suggested_port: 'COM7',

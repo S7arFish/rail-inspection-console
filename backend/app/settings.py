@@ -87,6 +87,16 @@ class Settings:
     # --- paths -------------------------------------------------------------
     database_path: Path = field(default_factory=lambda: REPO_ROOT / "data" / "rail_inspection.db")
     parser_config_path: Path = field(default_factory=lambda: BACKEND_DIR / "config" / "parser.yaml")
+    # Pre-built React SPA served by FastAPI in production (Pi kiosk). Absent on a
+    # dev machine, where Vite serves the frontend instead.
+    web_dir: Path = field(default_factory=lambda: REPO_ROOT / "deploy" / "pi" / "web")
+
+    # --- listen address ----------------------------------------------------
+    # Loopback by default: the Pi shows the console on its own HDMI output, so
+    # there is no reason to expose it to the LAN. RIC_HOST=0.0.0.0 is the
+    # documented debug override and does so at the operator's own risk.
+    host: str = "127.0.0.1"
+    port: int = 8000
 
     # --- HTTP / CORS -------------------------------------------------------
     app_name: str = "rail-inspection-console-api"
@@ -121,6 +131,9 @@ class Settings:
             "app_version": self.app_version,
             "database_path": self.db_path_str,
             "parser_config_path": str(self.parser_config_path),
+            "web_dir": str(self.web_dir),
+            "host": self.host,
+            "port": self.port,
             "cors_origins": list(self.cors_origins),
             "serial_port": self.serial_port,
             "serial_baudrate": self.serial_baudrate,
@@ -158,11 +171,17 @@ def load_settings() -> Settings:
     parser_raw = _raw("RIC_PARSER_CONFIG", "")
     parser_path = Path(parser_raw).expanduser().resolve() if parser_raw else BACKEND_DIR / "config" / "parser.yaml"
 
+    web_raw = _raw("RIC_WEB_DIR", "")
+    web_dir = Path(web_raw).expanduser().resolve() if web_raw else REPO_ROOT / "deploy" / "pi" / "web"
+
     stopbits_raw = _raw("RIC_SERIAL_STOPBITS", "1")
 
     return Settings(
         database_path=database_path,
         parser_config_path=parser_path,
+        web_dir=web_dir,
+        host=_raw("RIC_HOST", "127.0.0.1").strip() or "127.0.0.1",
+        port=_int("RIC_PORT", 8000),
         app_name=_raw("RIC_APP_NAME", "rail-inspection-console-api"),
         app_version=_raw("RIC_APP_VERSION", "0.1.0"),
         cors_origins=_origins(_raw("RIC_CORS_ORIGINS", "")),

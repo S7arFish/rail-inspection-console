@@ -19,12 +19,20 @@ export type SerialState =
 /** Where a live frame came from. `dhj9` is the laser detector. */
 export type LiveSource = 'dhj9' | 'console' | (string & {})
 
+/**
+ * Platform-neutral: `device` is `COM7` on Windows and `/dev/ttyUSB0` on Linux.
+ * Nothing may assume a `COM` prefix.
+ */
 export interface PortInfo {
   device: string
   name: string
   description: string | null
   hwid: string | null
-  preferred: boolean
+  manufacturer: string | null
+  vid: number | null
+  pid: number | null
+  serial_number: string | null
+  suggested: boolean
 }
 
 export interface PortsResponse {

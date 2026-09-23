@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=RIC Console Kiosk
+GenericName=Inspection console
+Comment=Rail inspection console, full screen on this machine's HDMI display
+Exec=@RIC_DIR@/scripts/pi-kiosk.sh
+Icon=utilities-terminal
+Terminal=false
+# Runs in the user's own desktop session, so Chromium is never started as root.
+X-GNOME-Autostart-enabled=true
+X-LXDE-Order=90
